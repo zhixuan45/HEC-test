@@ -1,0 +1,5 @@
+<host-apdu-service xmlns:android="http://schemas.android.com/apk/res/android" android:description="仅用于自定义 AID 的 ISO-DEP 协议测试" android:requireDeviceUnlock="false">
+    <aid-group android:category="other" android:description="独立测试应用">
+        <aid-filter android:name="F0010203040506" />
+    </aid-group>
+</host-apdu-service>
