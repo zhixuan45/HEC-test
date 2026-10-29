@@ -3,6 +3,7 @@ on:
   workflow_dispatch:
   push:
     branches: [main, master]
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -12,18 +13,31 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - name: Configure Android SDK
-        uses: android-actions/setup-android@v3
-        with:
-          accept-android-sdk-licenses: true
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.10.2'
-      - name: Install Android SDK platform
-        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - name: Check preinstalled Android SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "ANDROID_HOME=${ANDROID_HOME:-}"
+          echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-}"
+          SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          test -d "$SDK" || { echo "Android SDK not installed on runner"; exit 1; }
+          ls -la "$SDK/platforms" || true
+          ls -la "$SDK/build-tools" || true
+          if [ ! -f "$SDK/platforms/android-35/android.jar" ]; then
+            echo "Android API 35 is missing. Checking sdkmanager availability."
+            SDKMANAGER="$(find "$SDK/cmdline-tools" -path '*/bin/sdkmanager' -type f | sort -V | tail -n 1)"
+            test -n "$SDKMANAGER" || { echo "sdkmanager unavailable"; exit 1; }
+            yes | "$SDKMANAGER" --sdk_root="$SDK" --licenses >/dev/null || true
+            "$SDKMANAGER" --sdk_root="$SDK" "platforms;android-35" "build-tools;35.0.0"
+          fi
       - name: Build debug APK
         run: gradle --no-daemon assembleDebug
       - uses: actions/upload-artifact@v4
+        if: success()
         with:
           name: hce-demo-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
