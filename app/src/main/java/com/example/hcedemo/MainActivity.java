@@ -6,6 +6,12 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.nfc.NfcAdapter;
+import android.nfc.cardemulation.CardEmulation;
+import android.content.ComponentName;
+import android.content.ClipData;
+import android.content.ClipboardManager;
+import android.provider.Settings;
+import android.os.Build;
 import android.nfc.Tag;
 import android.nfc.tech.NfcA;
 import android.nfc.tech.IsoDep;
@@ -26,6 +32,7 @@ public class MainActivity extends Activity {
     private TextView log;
     private NfcAdapter adapter;
     private boolean reading = false;
+    private TextView routeStatus;
     private final BroadcastReceiver receiver = new BroadcastReceiver() {
         @Override public void onReceive(Context context, Intent intent) {
             String line = intent.getStringExtra("line");
@@ -49,6 +56,19 @@ public class MainActivity extends Activity {
         status.setText("HCE: " + hce + " | NFC: " + (adapter != null && adapter.isEnabled())
           + "\n测试 AID: F0010203040506\n读卡模式仅检测技术参数，不读取余额或认证密钥。");
         layout.addView(status);
+        routeStatus = new TextView(this);
+        layout.addView(routeStatus);
+        Button refresh = new Button(this);
+        refresh.setText("刷新 NFC / HCE 路由诊断");
+        layout.addView(refresh);
+        refresh.setOnClickListener(v -> refreshRoute());
+        Button settings = new Button(this);
+        settings.setText("打开系统 NFC 设置");
+        layout.addView(settings);
+        settings.setOnClickListener(v -> {
+            try { startActivity(new Intent(Settings.ACTION_NFC_SETTINGS)); }
+            catch (Exception e) { append("系统不支持直接打开 NFC 设置"); }
+        });
         Button toggle = new Button(this);
         toggle.setText("启用实体卡检测");
         layout.addView(toggle);
@@ -57,6 +77,7 @@ public class MainActivity extends Activity {
             toggle.setText(reading ? "停止实体卡检测" : "启用实体卡检测");
             updateReader();
             append(reading ? "读卡模式开启：请贴近实体卡" : "读卡模式关闭");
+            refreshRoute();
         });
         TextView hint = new TextView(this);
         hint.setText("自定义 ISO-DEP 测试响应（HEX，含状态字）。先 SELECT 测试 AID，再发送 80CA000000。Classic 模拟不可用。");
@@ -68,6 +89,25 @@ public class MainActivity extends Activity {
         Button save = new Button(this);
         save.setText("保存测试响应");
         layout.addView(save);
+        Button report = new Button(this);
+        report.setText("复制诊断报告");
+        layout.addView(report);
+        report.setOnClickListener(v -> {
+            String data = "HEC-test 诊断报告\n" + routeStatus.getText()
+                + "\n已验证：实体卡曾报告 IsoDep + MifareClassic 接口。"
+                + "\n未验证：学校终端实际使用 Classic 还是 ISO-DEP。"
+                + "\n注意：无 APDU 日志不能证明终端使用 Classic。\n"
+                + DiagnosticLog.history(this);
+            ((ClipboardManager)getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(ClipData.newPlainText("HCE diagnostic", data));
+            append("报告已复制，可粘贴发送（可能包含卡片 UID，请注意隐私）");
+        });
+        Button clear = new Button(this);
+        clear.setText("清空诊断日志");
+        layout.addView(clear);
+        clear.setOnClickListener(v -> {
+            DiagnosticLog.clear(this);
+            log.setText("日志已清空");
+        });
         save.setOnClickListener(v -> {
             String value = responseInput.getText().toString().replaceAll("\\s+", "").toUpperCase(Locale.ROOT);
             if (value.length() < 4 || value.length() % 2 != 0 || !value.matches("[0-9A-F]+") || value.length() > 512) {
@@ -84,10 +124,34 @@ public class MainActivity extends Activity {
         scroll.addView(log);
         layout.addView(scroll,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,0,1));
         setContentView(layout);
+        log.setText(DiagnosticLog.history(this));
+        refreshRoute();
     }
     private void append(String line) {
         runOnUiThread(() -> log.append("\n" + line));
     }
+    private void refreshRoute() {
+        StringBuilder b = new StringBuilder("设备路由状态（仅公开 API 可见）");
+        boolean enabled = adapter != null && adapter.isEnabled();
+        b.append("\nNFC 开启：").append(enabled);
+        b.append("\nHCE 支持：").append(getPackageManager().hasSystemFeature(PackageManager.FEATURE_NFC_HOST_CARD_EMULATION));
+        b.append("\n读卡模式：").append(reading ? "已开启（此时不能同时作 HCE）" : "已关闭");
+        if (enabled && Build.VERSION.SDK_INT >= 19) {
+            try {
+                CardEmulation em = CardEmulation.getInstance(adapter);
+                ComponentName component = new ComponentName(this, DemoHceService.class);
+                b.append("\n本应用 AID 注册：").append(em.getAidsForService(component, CardEmulation.CATEGORY_OTHER));
+                b.append("\n本应用 other 分类默认服务：").append(em.isDefaultServiceForCategory(component, CardEmulation.CATEGORY_OTHER));
+                b.append("\n测试 AID 的默认处理服务：").append(em.isDefaultServiceForAid(component, "F0010203040506"));
+            } catch (Exception e) {
+                b.append("\nHCE 路由查询失败：").append(e.getClass().getSimpleName());
+            }
+        }
+        b.append("\n系统钱包私有路由及其他服务 APDU：普通应用无法查看");
+        routeStatus.setText(b.toString());
+        DiagnosticLog.add(this, "路由状态刷新：" + b.toString().replace("\n", " | "));
+    }
+
     private void updateReader() {
         if (adapter == null) { append("未检测到 NFC 适配器"); return; }
         if (reading) {
@@ -122,7 +186,7 @@ public class MainActivity extends Activity {
         Ndef ndef = Ndef.get(tag);
         b.append("\nNDEF: ").append(ndef != null ? "支持" : "未发现");
         b.append("\n说明: 以上为本机报告的协议接口，不代表支持卡片模拟。");
-        append(b.toString());
+        DiagnosticLog.add(this, b.toString());
     }
     private static String hex(byte[] data) {
         if (data == null) return "无";
@@ -130,7 +194,7 @@ public class MainActivity extends Activity {
         for (byte v : data) b.append(String.format(Locale.ROOT,"%02X",v & 0xFF));
         return b.toString();
     }
-    @Override public void onResume() { super.onResume(); if (reading) updateReader(); }
+    @Override public void onResume() { super.onResume(); if (reading) updateReader(); if (routeStatus != null) refreshRoute(); }
     @Override public void onPause() { if (reading && adapter != null) adapter.disableReaderMode(this); super.onPause(); }
     @Override public void onStart() {
         super.onStart();
