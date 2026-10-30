@@ -9,6 +9,7 @@ public class DemoHceService extends HostApduService {
     private static final byte[] AID = hex("F0010203040506");
     private static final byte[] SUCCESS = hex("9000");
     private static final byte[] NOT_SUPPORTED = hex("6D00");
+    private static final byte[] TEST_COMMAND = hex("80CA000000");
 
     @Override public byte[] processCommandApdu(byte[] command, Bundle extras) {
         publish("收到 APDU: " + toHex(command));
@@ -22,6 +23,11 @@ public class DemoHceService extends HostApduService {
                 && Arrays.equals(Arrays.copyOfRange(command, 5, 5 + AID.length), AID)) {
             publish("测试 AID 匹配，返回 9000");
             return SUCCESS;
+        }
+        if (Arrays.equals(command, TEST_COMMAND)) {
+            String response = getSharedPreferences("hce_test", MODE_PRIVATE).getString("response", "48656C6C6F9000");
+            publish("测试命令匹配，返回: " + response);
+            return hex(response);
         }
         publish("非测试指令，返回 6D00");
         return NOT_SUPPORTED;
