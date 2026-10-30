@@ -117,13 +117,14 @@ public class MainActivity extends Activity {
             getSharedPreferences("hce_test", MODE_PRIVATE).edit().putString("response", value).apply();
             append("已保存自定义测试响应: " + value);
         });
-        ScrollView scroll = new ScrollView(this);
         log = new TextView(this);
         log.setText("等待操作…");
         log.setTextIsSelectable(true);
-        scroll.addView(log);
-        layout.addView(scroll,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,0,1));
-        setContentView(layout);
+        log.setMinHeight((int)(300 * getResources().getDisplayMetrics().density));
+        layout.addView(log);
+        ScrollView outerScroll = new ScrollView(this);
+        outerScroll.addView(layout);
+        setContentView(outerScroll);
         log.setText(DiagnosticLog.history(this));
         refreshRoute();
     }
