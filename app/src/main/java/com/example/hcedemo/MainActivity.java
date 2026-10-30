@@ -15,6 +15,7 @@ import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.view.ViewGroup;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -56,6 +57,25 @@ public class MainActivity extends Activity {
             toggle.setText(reading ? "停止实体卡检测" : "启用实体卡检测");
             updateReader();
             append(reading ? "读卡模式开启：请贴近实体卡" : "读卡模式关闭");
+        });
+        TextView hint = new TextView(this);
+        hint.setText("自定义 ISO-DEP 测试响应（HEX，含状态字）。先 SELECT 测试 AID，再发送 80CA000000。Classic 模拟不可用。");
+        layout.addView(hint);
+        EditText responseInput = new EditText(this);
+        responseInput.setSingleLine(true);
+        responseInput.setText(getSharedPreferences("hce_test", MODE_PRIVATE).getString("response", "48656C6C6F9000"));
+        layout.addView(responseInput);
+        Button save = new Button(this);
+        save.setText("保存测试响应");
+        layout.addView(save);
+        save.setOnClickListener(v -> {
+            String value = responseInput.getText().toString().replaceAll("\\s+", "").toUpperCase(Locale.ROOT);
+            if (value.length() < 4 || value.length() % 2 != 0 || !value.matches("[0-9A-F]+") || value.length() > 512) {
+                append("保存失败：输入偶数位 HEX，至少包含两字节状态字，最多 256 字节");
+                return;
+            }
+            getSharedPreferences("hce_test", MODE_PRIVATE).edit().putString("response", value).apply();
+            append("已保存自定义测试响应: " + value);
         });
         ScrollView scroll = new ScrollView(this);
         log = new TextView(this);
