@@ -141,8 +141,10 @@ public class MainActivity extends Activity {
             try {
                 CardEmulation em = CardEmulation.getInstance(adapter);
                 ComponentName component = new ComponentName(this, DemoHceService.class);
-                b.append("\n本应用 AID 注册：").append(em.getAidsForService(component, CardEmulation.CATEGORY_OTHER));
-                b.append("\n本应用 other 分类默认服务：").append(em.isDefaultServiceForCategory(component, CardEmulation.CATEGORY_OTHER));
+                b.append("\n测试 AID 静态配置：F0010203040506（apduservice.xml）");
+                b.append("\n动态注册 AID：").append(em.getAidsForService(component, CardEmulation.CATEGORY_OTHER));
+                b.append("（null 可为正常：该 API 不返回静态注册项）");
+                b.append("\nother 分类默认服务（false 不一定异常）：").append(em.isDefaultServiceForCategory(component, CardEmulation.CATEGORY_OTHER));
                 b.append("\n测试 AID 的默认处理服务：").append(em.isDefaultServiceForAid(component, "F0010203040506"));
             } catch (Exception e) {
                 b.append("\nHCE 路由查询失败：").append(e.getClass().getSimpleName());
