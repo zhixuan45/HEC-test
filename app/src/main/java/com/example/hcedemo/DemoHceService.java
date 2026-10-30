@@ -11,6 +11,15 @@ public class DemoHceService extends HostApduService {
     private static final byte[] NOT_SUPPORTED = hex("6D00");
     private static final byte[] TEST_COMMAND = hex("80CA000000");
 
+    @Override public void onCreate() {
+        super.onCreate();
+        publish("HCE 服务 onCreate（仅表示服务被创建，并非读卡器已选择 AID）");
+    }
+    @Override public void onDestroy() {
+        publish("HCE 服务 onDestroy");
+        super.onDestroy();
+    }
+
     @Override public byte[] processCommandApdu(byte[] command, Bundle extras) {
         publish("收到 APDU: " + toHex(command));
         if (command != null && command.length >= 5
@@ -38,10 +47,7 @@ public class DemoHceService extends HostApduService {
     }
 
     private void publish(String line) {
-        Intent i = new Intent("com.example.hcedemo.LOG");
-        i.setPackage(getPackageName());
-        i.putExtra("line", line);
-        sendBroadcast(i);
+        DiagnosticLog.add(this, line);
     }
 
     private static byte[] hex(String s) {
